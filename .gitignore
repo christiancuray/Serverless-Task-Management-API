@@ -12,3 +12,9 @@ cdk.out
 cdk.out/ 
 src/__pycache__/
 .env
+node_modules/
+.DS_Store
+
+wiki/
+.agents
+AGENTS.md
