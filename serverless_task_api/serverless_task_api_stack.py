@@ -5,6 +5,7 @@ from aws_cdk import (
     aws_dynamodb as dynamodb,
     aws_lambda as _lambda,
     aws_apigateway as apigateway,
+    aws_cognito as cognito,
 )
 from constructs import Construct
 
@@ -21,6 +22,24 @@ class ServerlessTaskApiStack(Stack):
         #     visibility_timeout=Duration.seconds(300),
         # )
 
+        # Cognito User Pool
+        pool = cognito.UserPool(
+            self, "TaskUsers",
+            self_sign_up_enabled=True,
+            sign_in_aliases=cognito.SignInAliases(email=True),
+            auto_verify=cognito.AutoVerifiedAttrs(email=True),
+        )
+
+        client = pool.add_client(
+            "TaskAppClient",
+            auth_flows=cognito.AuthFlow(user_password=True),
+            generate_secret=False,
+        )
+
+        authorizer = apigateway.CognitoUserPoolsAuthorizer(
+            self, "TaskAuthorizer", cognito_user_pools=[pool]
+        )
+
         # dynamo db
         tasks_table = dynamodb.Table(
             self, "TasksTable",
@@ -36,7 +55,7 @@ class ServerlessTaskApiStack(Stack):
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.DESTROY
         )
-
+        # lambda function
         fn =_lambda.Function(
             self, "TasksHandler",
             runtime=_lambda.Runtime.PYTHON_3_13,
@@ -44,7 +63,7 @@ class ServerlessTaskApiStack(Stack):
             code=_lambda.Code.from_asset("src"),
             timeout=Duration.seconds(15),
             environment={
-                "TABLE_NAME": tasks_table.table_name
+                "TASKS_TABLE_NAME": tasks_table.table_name
             },
         )
         tasks_table.grant_read_write_data(fn)
@@ -53,5 +72,18 @@ class ServerlessTaskApiStack(Stack):
         # API Gateway
         api = apigateway.RestApi(self, "TasksApi")
         tasks = api.root.add_resource("tasks")
-        tasks.add_method("GET", apigateway.LambdaIntegration(fn))
-        tasks.add_method("POST", apigateway.LambdaIntegration(fn))
+        for method in ("GET", "POST"):
+            tasks.add_method(
+                method,
+                apigateway.LambdaIntegration(fn),
+                authorizer=authorizer,
+                authorization_type=apigateway.AuthorizationType.COGNITO,
+            )
+        item = tasks.add_resource("{taskId}")
+        for method in ("GET", "PUT", "DELETE"):
+            item.add_method(
+                method,
+                apigateway.LambdaIntegration(fn),
+                authorizer=authorizer,
+                authorization_type=apigateway.AuthorizationType.COGNITO,
+            )

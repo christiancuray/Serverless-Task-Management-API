@@ -188,6 +188,23 @@ AWS CDK generates the CloudFormation template from the Python infrastructure def
 
 The project uses Floci to test supported AWS services locally before deploying to real AWS.
 
+### Run automated tests
+
+Install development dependencies and run the unit suite (uses mocked DynamoDB; no Floci instance is needed):
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+The Floci handler integration test is kept separate. It creates and deletes a uniquely named disposable DynamoDB table, so run it only against a disposable Floci environment:
+
+```bash
+RUN_FLOCI_INTEGRATION=1 pytest tests/integration -q
+```
+
+Set `AWS_ENDPOINT_URL` if Floci is not at `http://localhost:4566`. The integration test uses the configured AWS credentials and region, defaulting to `test` / `test` and `us-east-1`.
+
 ### List DynamoDB tables
 
 ```bash
