@@ -24,7 +24,7 @@ def handler(event, context):
     
     # Determine the HTTP method from the event
     method = event.get("httpMethod") or event.get("requestContext", {}).get("http", {}).get("method")
-    task_id = (event.get("pathParameters") or {}).get("id")
+    task_id = (event.get("pathParameters") or {}).get("taskId")
     key = {"userId": user_id, "taskId": task_id} if task_id else None
 
     # Handle POST req to create a new task
@@ -90,7 +90,7 @@ def handler(event, context):
                 Key=key,
                 ConditionExpression="attribute_exists(taskId)"
             )
-            return response(204, {"message": "Task deleted successfully!"})
+            return response(204, {})
         except ClientError as e:
             if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
                 return response(404, {"message": "Task not found!"})

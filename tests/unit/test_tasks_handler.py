@@ -38,7 +38,7 @@ def app(monkeypatch):
 
 
 def call(app, method="GET", *, user="user-a", task_id=None, body=None, raw_body=None, claims=True):
-    event = {"httpMethod": method, "pathParameters": {"id": task_id} if task_id else None}
+    event = {"httpMethod": method, "pathParameters": {"taskId": task_id} if task_id else None}
     if claims:
         event["requestContext"] = {"authorizer": {"claims": {"sub": user}}}
     if body is not None:

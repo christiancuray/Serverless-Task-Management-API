@@ -65,7 +65,7 @@ def request(handler, method, *, user="integration-user", task_id=None, body=None
     event = {
         "httpMethod": method,
         "requestContext": {"authorizer": {"claims": {"sub": user}}},
-        "pathParameters": {"id": task_id} if task_id else None,
+        "pathParameters": {"taskId": task_id} if task_id else None,
     }
     if body is not None:
         event["body"] = json.dumps(body)
