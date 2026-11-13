@@ -4,7 +4,7 @@ A serverless REST API built with **Python and AWS CDK** for creating and managin
 
 This project is designed to strengthen my backend development and cloud computing skills while preparing for the **AWS Certified Developer – Associate** certification.
 
-The application is currently being developed and tested locally using **Floci**, an AWS cloud emulator. Once the core functionality is complete, I plan to deploy the application to real AWS services.
+The API is developed locally using **Floci**, an AWS cloud emulator. The current implementation includes authenticated task CRUD using Cognito, API Gateway, Lambda, and DynamoDB. Real AWS deployment remains planned.
 
 ## Project Goals
 
@@ -34,7 +34,7 @@ Client (Postman / Frontend)
        (Task Storage)
 ```
 
-Additional services will be introduced as the project progresses:
+The current infrastructure also includes Cognito authentication. SQS and a worker Lambda are planned for a later phase:
 
 ```text
 Amazon Cognito
@@ -60,7 +60,7 @@ Amazon Cognito
 4. DynamoDB stores or retrieves task information.
 5. Lambda returns an HTTP response through API Gateway.
 
-In later phases, Cognito will provide user authentication, while SQS will handle asynchronous background tasks.
+The Lambda handler scopes tasks to the authenticated user's Cognito `sub` claim. Asynchronous processing with SQS remains planned.
 
 ## Tech Stack
 
@@ -71,7 +71,7 @@ In later phases, Cognito will provide user authentication, while SQS will handle
 | AWS Lambda         | Serverless application logic     |
 | Amazon API Gateway | REST API endpoints               |
 | Amazon DynamoDB    | NoSQL task storage               |
-| Amazon Cognito     | User authentication (planned)    |
+| Amazon Cognito     | User authentication              |
 | Amazon SQS         | Background processing (planned)  |
 | Amazon CloudWatch  | Logging and monitoring (planned) |
 | Floci              | Local AWS service emulation      |
@@ -107,13 +107,13 @@ The `serverless_task_api` directory contains the infrastructure code, while `src
 
 ## API Endpoints
 
-| Method | Endpoint      | Description              | Status  |
-| ------ | ------------- | ------------------------ | ------- |
-| POST   | `/tasks`      | Create a task            | Week 1  |
-| GET    | `/tasks`      | Retrieve tasks           | Week 1  |
-| GET    | `/tasks/{id}` | Retrieve a specific task | Planned |
-| PUT    | `/tasks/{id}` | Update a task            | Planned |
-| DELETE | `/tasks/{id}` | Delete a task            | Planned |
+| Method | Endpoint          | Description               | Status      |
+| ------ | ----------------- | ------------------------- | ----------- |
+| POST   | `/tasks`          | Create a task             | Implemented |
+| GET    | `/tasks`          | Retrieve the user's tasks | Implemented |
+| GET    | `/tasks/{taskId}` | Retrieve a specific task  | Implemented |
+| PUT    | `/tasks/{taskId}` | Update a task             | Implemented |
+| DELETE | `/tasks/{taskId}` | Delete a task             | Implemented |
 
 ## Local Development Setup
 
@@ -148,7 +148,7 @@ source .venv/bin/activate
 
 ```bash
 pip install -r requirements.txt
-pip install boto3 pytest
+pip install -r requirements-dev.txt
 ```
 
 ### 4. Configure Floci
@@ -223,7 +223,7 @@ aws --endpoint-url=http://localhost:4566 dynamodb describe-table \
 After the `Tasks` table exists in Floci:
 
 ```bash
-export TABLE_NAME=Tasks
+export TASKS_TABLE_NAME=Tasks
 export AWS_REGION=us-east-1
 
 python - <<'PY'
@@ -241,7 +241,7 @@ PY
 
 This directly tests the Python handler. It does not test API Gateway or the deployed Lambda runtime.
 
-Once API Gateway and Lambda are successfully deployed to the emulator, the API will also be tested using Postman or curl.
+The integration test directly invokes the handler; it does not test API Gateway or Cognito token validation.
 
 ## Floci and Local Development Limitations
 
@@ -261,7 +261,7 @@ The project will be designed to minimize environment-specific code so that migra
 
 ## Future AWS Deployment
 
-After completing local development, the application will be deployed to a real AWS account.
+Real AWS deployment is a planned project phase. Before deploying, verify the target account, region, credentials, and costs.
 
 Planned deployment activities include:
 
@@ -278,27 +278,24 @@ The same AWS CDK infrastructure definitions will be reused where compatible, wit
 
 ## Development Roadmap
 
-| Week   | Focus                                    | Estimated Time |
-| ------ | ---------------------------------------- | -------------- |
-| Week 1 | AWS CDK, Lambda, API Gateway, DynamoDB   | 8–12 hours     |
-| Week 2 | Complete CRUD, Cognito, IAM security     | 8–12 hours     |
-| Week 3 | SQS, asynchronous processing, monitoring | 7–10 hours     |
-| Week 4 | Automated testing, CI/CD, documentation  | 8–12 hours     |
-
-**Estimated total: 31–46 hours**
+| Week   | Focus                                       | Status                                                               |
+| ------ | ------------------------------------------- | -------------------------------------------------------------------- |
+| Week 1 | AWS CDK, Lambda, API Gateway, DynamoDB      | Implemented                                                          |
+| Week 2 | Complete CRUD, Cognito, IAM security        | CRUD and Cognito implemented; end-to-end security validation remains |
+| Week 3 | SQS, asynchronous processing, monitoring    | Planned                                                              |
+| Week 4 | Automated testing, CI/CD, documentation     | Tests and documentation exist; GitHub Actions CI planned             |
+| Week 5 | Real AWS deployment and security validation | Planned                                                              |
+| Week 6 | Frontend development and user experience    | Proposed extension; planned                                          |
 
 ## Project Status
 
-**In Development — Week 1**
-
 Current focus:
 
-- Defining AWS infrastructure with Python CDK.
-- Generating CloudFormation templates.
-- Configuring Floci for local AWS service testing.
-- Implementing and testing the first task API operations.
+- Continue local validation of the authenticated API and its infrastructure.
+- Add SQS-based asynchronous processing and monitoring (Week 3).
+- Complete CI automation and documentation (Week 4).
 
-Future improvements include authentication, asynchronous processing, automated deployment, and real AWS integration.
+Unit, infrastructure, and opt-in Floci integration tests are present; their current pass status and live deployment have not been verified. Real AWS deployment and frontend development are planned later phases.
 
 ## Learning Outcomes
 
