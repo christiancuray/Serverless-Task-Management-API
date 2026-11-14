@@ -2,6 +2,8 @@ import json
 import os
 import boto3 
 import uuid
+from datetime import datetime, timezone
+import logging
 
 from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
@@ -13,6 +15,7 @@ if os.getenv("AWS_ENDPOINT_URL"):
 table = boto3.resource("dynamodb", **client_options).Table(os.environ["TASKS_TABLE_NAME"])
 
 sqs = boto3.client("sqs", **client_options)
+logger = logging.getLogger(__name__)
 
 ###
 ### Do not read userId from a request body/header. In production, Lambda must be reachable only through
@@ -49,7 +52,14 @@ def handler(event, context):
                 "status": "TODO"
             }
             table.put_item(Item=item)
-            publish_task_created(item)
+            try:
+                publish_task_created(item)
+            except Exception:
+                logger.exception("Task persisted but event publishing failed; task_id=%s", item["taskId"])
+                return response(503, {
+                    "message": "Task was saved, but its event could not be published. Do not retry task creation.",
+                    "taskId": item["taskId"],
+                })
             return response(201, item)
 
         if method == "PUT" and task_id:
@@ -114,6 +124,8 @@ def publish_task_created(item):
             "eventId": str(uuid.uuid4()),
             "userId": item["userId"],
             "taskId": item["taskId"],
+            "occurredAt": datetime.now(timezone.utc).isoformat(),
+            "version": 1,
         })
     )
 
