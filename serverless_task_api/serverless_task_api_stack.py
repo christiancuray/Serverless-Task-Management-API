@@ -6,9 +6,10 @@ from aws_cdk import (
     aws_lambda as _lambda,
     aws_apigateway as apigateway,
     aws_cognito as cognito,
+    aws_sqs as sqs,
+    aws_lambda_event_sources as event_sources,
 )
 from constructs import Construct
-
 class ServerlessTaskApiStack(Stack):
 
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
@@ -40,6 +41,18 @@ class ServerlessTaskApiStack(Stack):
             self, "TaskAuthorizer", cognito_user_pools=[pool]
         )
 
+        # Dead Letter Queue for SQS
+        dlq = sqs.Queue(self, "TaskEventsDLQ",
+        retention_period=Duration.days(14))
+
+        # SQS Queue for Task Events
+        queue = sqs.Queue(self, "TaskEventsQueue",
+                          visibility_timeout=Duration.seconds(90),
+                          dead_letter_queue=sqs.DeadLetterQueue(
+                              max_receive_count=3,
+                              queue=dlq
+                          ))
+        
         # dynamo db
         tasks_table = dynamodb.Table(
             self, "TasksTable",
@@ -67,6 +80,16 @@ class ServerlessTaskApiStack(Stack):
             },
         )
         tasks_table.grant_read_write_data(fn)
+
+        worker = _lambda.Function(self, "TaskEventsWorkers",
+                                 runtime=_lambda.Runtime.PYTHON_3_13,
+                                 handler="task_events_worker.handler",
+                                 code=_lambda.Code.from_asset("src"),
+                                 timeout=Duration.seconds(20))
+        worker.add_event_source(event_sources.SqsEventSource(
+            queue, batch_size=5, report_batch_item_failures=True))
+        queue.grant_consume_messages(worker)
+        fn.add_environment("TASK_EVENTS_QUEUE_URL", queue.queue_url)
 
 
         # API Gateway

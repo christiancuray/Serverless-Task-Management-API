@@ -12,6 +12,8 @@ if os.getenv("AWS_ENDPOINT_URL"):
 
 table = boto3.resource("dynamodb", **client_options).Table(os.environ["TASKS_TABLE_NAME"])
 
+sqs = boto3.client("sqs", **client_options)
+
 ###
 ### Do not read userId from a request body/header. In production, Lambda must be reachable only through
 ### trusted paths or perform its own JWT validation.
@@ -47,6 +49,7 @@ def handler(event, context):
                 "status": "TODO"
             }
             table.put_item(Item=item)
+            publish_task_created(item)
             return response(201, item)
 
         if method == "PUT" and task_id:
@@ -99,6 +102,20 @@ def handler(event, context):
             
     # Handle Invalid method
     return response(405, {"message": "Method Not Allowed"})
+
+def publish_task_created(item):
+    queue_url = os.environ.get("TASK_EVENTS_QUEUE_URL")
+    if not queue_url:
+        raise RuntimeError("TASK_EVENTS_QUEUE_URL is missing")
+    sqs.send_message(
+        QueueUrl=queue_url,
+        MessageBody=json.dumps({
+            "eventType": "TASK_CREATED",
+            "eventId": str(uuid.uuid4()),
+            "userId": item["userId"],
+            "taskId": item["taskId"],
+        })
+    )
 
 def response(status, body):
     return {

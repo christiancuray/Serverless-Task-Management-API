@@ -34,7 +34,7 @@ Client (Postman / Frontend)
        (Task Storage)
 ```
 
-The current infrastructure also includes Cognito authentication. SQS and a worker Lambda are planned for a later phase:
+The current infrastructure also includes Cognito authentication and SQS-based background task event processing:
 
 ```text
 Amazon Cognito
@@ -60,7 +60,7 @@ Amazon Cognito
 4. DynamoDB stores or retrieves task information.
 5. Lambda returns an HTTP response through API Gateway.
 
-The Lambda handler scopes tasks to the authenticated user's Cognito `sub` claim. Asynchronous processing with SQS remains planned.
+The Lambda handler scopes tasks to the authenticated user's Cognito `sub` claim and publishes task-created events to SQS for worker processing.
 
 ## Tech Stack
 
@@ -72,7 +72,7 @@ The Lambda handler scopes tasks to the authenticated user's Cognito `sub` claim.
 | Amazon API Gateway | REST API endpoints               |
 | Amazon DynamoDB    | NoSQL task storage               |
 | Amazon Cognito     | User authentication              |
-| Amazon SQS         | Background processing (planned)  |
+| Amazon SQS         | Background task event processing |
 | Amazon CloudWatch  | Logging and monitoring (planned) |
 | Floci              | Local AWS service emulation      |
 | Docker             | Local container environment      |
@@ -282,7 +282,7 @@ The same AWS CDK infrastructure definitions will be reused where compatible, wit
 | ------ | ------------------------------------------- | -------------------------------------------------------------------- |
 | Week 1 | AWS CDK, Lambda, API Gateway, DynamoDB      | Implemented                                                          |
 | Week 2 | Complete CRUD, Cognito, IAM security        | CRUD and Cognito implemented; end-to-end security validation remains |
-| Week 3 | SQS, asynchronous processing, monitoring    | Planned                                                              |
+| Week 3 | SQS, asynchronous processing, monitoring    | SQS queue, DLQ, publisher, and worker implemented                    |
 | Week 4 | Automated testing, CI/CD, documentation     | Tests and documentation exist; GitHub Actions CI planned             |
 | Week 5 | Real AWS deployment and security validation | Planned                                                              |
 | Week 6 | Frontend development and user experience    | Proposed extension; planned                                          |
@@ -292,10 +292,10 @@ The same AWS CDK infrastructure definitions will be reused where compatible, wit
 Current focus:
 
 - Continue local validation of the authenticated API and its infrastructure.
-- Add SQS-based asynchronous processing and monitoring (Week 3).
+- Validate SQS event publishing, worker processing, and dead-letter queue behavior (Week 3).
 - Complete CI automation and documentation (Week 4).
 
-Unit, infrastructure, and opt-in Floci integration tests are present; their current pass status and live deployment have not been verified. Real AWS deployment and frontend development are planned later phases.
+Week 3 implementation is complete: task creation publishes SQS events, a worker processes task-created events, and the queue is configured with a dead-letter queue. Unit and opt-in Floci integration tests cover the worker and publisher; their current pass status and live deployment have not been verified. Real AWS deployment and frontend development are planned later phases.
 
 ## Learning Outcomes
 
