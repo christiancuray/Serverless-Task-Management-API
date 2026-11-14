@@ -22,19 +22,28 @@ def record(message_id, body):
     return {"messageId": message_id, "body": body}
 
 
-def test_successful_task_created_event_is_acknowledged(worker, caplog):
-    event = {
-        "Records": [record("message-1", json.dumps({
-            "eventType": "TASK_CREATED",
-            "userId": "user-1",
-            "taskId": "task-1",
-        }))]
+def task_created_event(**overrides):
+    payload = {
+        "eventType": "TASK_CREATED",
+        "eventId": "event-1",
+        "userId": "user-1",
+        "taskId": "task-1",
+        "occurredAt": "2026-11-14T12:00:00+00:00",
+        "version": 1,
     }
+    payload.update(overrides)
+    return json.dumps(payload)
+
+
+def test_successful_task_created_event_is_acknowledged(worker, caplog):
+    event = {"Records": [record("message-1", task_created_event())]}
 
     result = worker.handler(event, None)
 
     assert result == {"batchItemFailures": []}
-    assert "Task created for user user-1 with task ID task-1" in caplog.text
+    assert "event_id=event-1" in caplog.text
+    assert "user_id=user-1" in caplog.text
+    assert "task_id=task-1" in caplog.text
 
 
 def test_malformed_json_is_reported_as_batch_failure(worker):
@@ -44,7 +53,7 @@ def test_malformed_json_is_reported_as_batch_failure(worker):
 
 
 def test_unsupported_event_type_is_reported_as_batch_failure(worker):
-    body = json.dumps({"eventType": "TASK_DELETED", "taskId": "task-1"})
+    body = task_created_event(eventType="TASK_DELETED")
 
     result = worker.handler({"Records": [record("wrong-type", body)]}, None)
 
@@ -52,7 +61,7 @@ def test_unsupported_event_type_is_reported_as_batch_failure(worker):
 
 
 def test_mixed_batch_reports_only_the_failed_message(worker):
-    good = json.dumps({"eventType": "TASK_CREATED", "userId": "user-1", "taskId": "task-1"})
+    good = task_created_event()
     bad = json.dumps({"eventType": "TASK_UPDATED", "userId": "user-1", "taskId": "task-2"})
 
     result = worker.handler(
@@ -60,3 +69,45 @@ def test_mixed_batch_reports_only_the_failed_message(worker):
     )
 
     assert result == {"batchItemFailures": [{"itemIdentifier": "bad-message"}]}
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"eventId": ""},
+        {"userId": ""},
+        {"taskId": ""},
+        {"occurredAt": ""},
+        {"version": None},
+    ],
+)
+def test_missing_required_event_field_is_rejected(worker, overrides):
+    body = task_created_event(**overrides)
+
+    result = worker.handler({"Records": [record("missing-field", body)]}, None)
+
+    assert result == {"batchItemFailures": [{"itemIdentifier": "missing-field"}]}
+
+
+def test_duplicate_delivery_is_safe_and_acknowledged(worker, caplog):
+    body = task_created_event()
+
+    result = worker.handler(
+        {"Records": [record("delivery-1", body), record("delivery-2", body)]}, None
+    )
+
+    assert result == {"batchItemFailures": []}
+    assert caplog.text.count("Processed task event event_id=event-1") == 2
+
+
+def test_retryable_processing_failure_returns_partial_batch_failure(worker, monkeypatch):
+    def fail_processing(payload):
+        raise RuntimeError("temporary downstream failure")
+
+    monkeypatch.setattr(worker, "process_event", fail_processing)
+
+    result = worker.handler(
+        {"Records": [record("retry-message", task_created_event())]}, None
+    )
+
+    assert result == {"batchItemFailures": [{"itemIdentifier": "retry-message"}]}

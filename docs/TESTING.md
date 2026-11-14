@@ -39,7 +39,7 @@ export AWS_SECRET_ACCESS_KEY=test
 RUN_FLOCI_INTEGRATION=1 python -m pytest tests/integration -q
 ```
 
-**Safety:** the integration fixture creates and deletes a uniquely named table. Never set `AWS_ENDPOINT_URL` to a real AWS endpoint when running this test. The original integration fixture should be hardened to reject non-loopback endpoints and to use disposable credentials explicitly before broader use.
+**Safety:** the integration fixtures create and delete uniquely named disposable tables and queues. They reject non-loopback endpoints and never access or delete the development `Tasks` table. Never set `AWS_ENDPOINT_URL` to a real AWS endpoint when running them.
 
 ## Test coverage
 
@@ -60,6 +60,16 @@ RUN_FLOCI_INTEGRATION=1 python -m pytest tests/integration -q
 | Unsupported method | `test_unsupported_method` | 405 |
 
 The unit isolation test verifies the **handler's query-key behavior**, not Cognito JWT verification or DynamoDB's actual isolation guarantees. End-to-end security still needs API Gateway + Cognito integration testing.
+
+## Task event contract and failure behavior
+
+Task-created SQS messages contain `eventType`, `eventId`, `userId`, `taskId`, `occurredAt` (UTC ISO-8601), and `version` (`1`). The worker validates these fields, logs the event ID and task ID, and returns partial batch failures for malformed, unsupported, or retryable processing failures. Its current processing is log-only and has no state-changing side effects, so duplicate delivery is safe; add idempotency storage before introducing side effects.
+
+The producer writes the task to DynamoDB before publishing. If SQS publishing fails, it returns `503` with the saved task ID and tells the caller not to repeat task creation. The task remains persisted and its event is not automatically republished; operational recovery must publish the event using that task ID. A durable outbox/retry mechanism is future work.
+
+`tests/integration/test_task_events_floci.py` uses uniquely named source and dead-letter queues and validates loopback-only Floci endpoints. It sends messages through SQS and invokes the worker directly; it does not test Lambda event-source mapping. The redrive test checks Floci's SQS redrive support, whose timing and behavior may differ from AWS. Keep queue transport/worker processing and event-source mapping as separate verification layers.
+
+The CRUD integration test also invokes the handler directly with synthetic `requestContext.authorizer.claims`. It verifies handler behavior and per-user DynamoDB keys only; it does **not** verify Cognito JWT signatures, API Gateway routing, or the API Gateway Cognito authorizer. Those require a separate end-to-end test through API Gateway.
 
 ## Findings in production handler
 

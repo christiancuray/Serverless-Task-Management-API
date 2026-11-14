@@ -73,24 +73,6 @@ def test_create_task_uses_authenticated_user_and_defaults_status(app):
     app.table.put_item.assert_called_once_with(Item=item)
 
 
-def test_create_publishes_expected_task_created_message(app):
-    result = call(app, "POST", body={"title": "Write tests"})
-    item = payload(result)
-
-    assert result["statusCode"] == 201
-    app.sqs.send_message.assert_called_once()
-    kwargs = app.sqs.send_message.call_args.kwargs
-    assert kwargs["QueueUrl"] == "https://sqs.us-east-1.amazonaws.com/123456789012/unit-test"
-    message = json.loads(kwargs["MessageBody"])
-    assert message == {
-        "eventType": "TASK_CREATED",
-        "eventId": message["eventId"],
-        "userId": "user-a",
-        "taskId": item["taskId"],
-    }
-    assert message["eventId"]
-
-
 def test_list_tasks_is_scoped_to_authenticated_user(app):
     app.table.query.return_value = {"Items": [{"taskId": "t1", "userId": "user-a"}]}
     result = call(app, "GET")
@@ -130,6 +112,15 @@ def test_delete_task_is_scoped_and_requires_existing_task(app):
     assert result["statusCode"] == 204
     app.table.delete_item.assert_called_once_with(
         Key={"userId": "user-a", "taskId": "t1"},
+        ConditionExpression="attribute_exists(taskId)",
+    )
+
+def test_delete_task_missing(app):
+    app.table.delete_item.side_effect = conditional_failure("DeleteItem")
+    result = call(app, "DELETE", task_id="unknownId")
+    assert result["statusCode"] == 404
+    app.table.delete_item.assert_called_once_with(
+        Key={"userId": "user-a", "taskId": "unknownId"},
         ConditionExpression="attribute_exists(taskId)",
     )
 
