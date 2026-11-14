@@ -25,16 +25,19 @@ def conditional_failure(operation):
 def app(monkeypatch):
     """Mock boto3 before importing the handler, which initializes its table at import time."""
     monkeypatch.setenv("TASKS_TABLE_NAME", "UnitTestTasks")
+    monkeypatch.setenv("TASK_EVENTS_QUEUE_URL", "https://sqs.us-east-1.amazonaws.com/123456789012/unit-test")
     monkeypatch.delenv("AWS_ENDPOINT_URL", raising=False)
     table = MagicMock()
     resource = MagicMock()
     resource.Table.return_value = table
     monkeypatch.setattr(boto3, "resource", lambda *args, **kwargs: resource)
+    sqs = MagicMock()
+    monkeypatch.setattr(boto3, "client", lambda service, *args, **kwargs: sqs)
 
     spec = importlib.util.spec_from_file_location("isolated_tasks_handler", HANDLER_PATH)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return SimpleNamespace(handler=module.handler, table=table)
+    return SimpleNamespace(handler=module.handler, table=table, sqs=sqs)
 
 
 def call(app, method="GET", *, user="user-a", task_id=None, body=None, raw_body=None, claims=True):
@@ -68,6 +71,24 @@ def test_create_task_uses_authenticated_user_and_defaults_status(app):
     }
     assert item["taskId"]
     app.table.put_item.assert_called_once_with(Item=item)
+
+
+def test_create_publishes_expected_task_created_message(app):
+    result = call(app, "POST", body={"title": "Write tests"})
+    item = payload(result)
+
+    assert result["statusCode"] == 201
+    app.sqs.send_message.assert_called_once()
+    kwargs = app.sqs.send_message.call_args.kwargs
+    assert kwargs["QueueUrl"] == "https://sqs.us-east-1.amazonaws.com/123456789012/unit-test"
+    message = json.loads(kwargs["MessageBody"])
+    assert message == {
+        "eventType": "TASK_CREATED",
+        "eventId": message["eventId"],
+        "userId": "user-a",
+        "taskId": item["taskId"],
+    }
+    assert message["eventId"]
 
 
 def test_list_tasks_is_scoped_to_authenticated_user(app):
