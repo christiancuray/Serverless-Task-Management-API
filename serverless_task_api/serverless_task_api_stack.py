@@ -1,4 +1,5 @@
 from aws_cdk import (
+    CfnOutput,
     Duration,
     RemovalPolicy,
     Stack,
@@ -36,6 +37,10 @@ class ServerlessTaskApiStack(Stack):
             auth_flows=cognito.AuthFlow(user_password=True),
             generate_secret=False,
         )
+        # Export identifiers needed by the opt-in deployed API test. These are
+        # resource identifiers, not credentials.
+        CfnOutput(self, "TaskUserPoolId", value=pool.user_pool_id)
+        CfnOutput(self, "TaskAppClientId", value=client.user_pool_client_id)
 
         authorizer = apigateway.CognitoUserPoolsAuthorizer(
             self, "TaskAuthorizer", cognito_user_pools=[pool]
@@ -52,7 +57,7 @@ class ServerlessTaskApiStack(Stack):
                               max_receive_count=3,
                               queue=dlq
                           ))
-        
+
         # dynamo db
         tasks_table = dynamodb.Table(
             self, "TasksTable",
@@ -68,6 +73,7 @@ class ServerlessTaskApiStack(Stack):
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.DESTROY
         )
+
         # lambda function
         fn =_lambda.Function(
             self, "TasksHandler",
@@ -80,6 +86,9 @@ class ServerlessTaskApiStack(Stack):
             },
         )
         tasks_table.grant_read_write_data(fn)
+
+        # Allow Task Handler Lambda to publish events to SQS
+        queue.grant_send_messages(fn)
 
         worker = _lambda.Function(self, "TaskEventsWorkers",
                                  runtime=_lambda.Runtime.PYTHON_3_13,
@@ -94,6 +103,10 @@ class ServerlessTaskApiStack(Stack):
 
         # API Gateway
         api = apigateway.RestApi(self, "TasksApi")
+        CfnOutput(self, "TasksApiUrl", value=api.url)
+        CfnOutput(self, "TasksApiId", value=api.rest_api_id)
+        CfnOutput(self, "TasksApiStage", value=api.deployment_stage.stage_name)
+        CfnOutput(self, "TaskAuthorizerId", value=authorizer.authorizer_id)
         tasks = api.root.add_resource("tasks")
         for method in ("GET", "POST"):
             tasks.add_method(
