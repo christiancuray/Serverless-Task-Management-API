@@ -63,7 +63,7 @@ The unit isolation test verifies the **handler's query-key behavior**, not Cogni
 
 ## Task event contract and failure behavior
 
-Task-created SQS messages contain `eventType`, `eventId`, `userId`, `taskId`, `occurredAt` (UTC ISO-8601), and `version` (`1`). The worker validates these fields, logs the event ID and task ID, and returns partial batch failures for malformed, unsupported, or retryable processing failures. Its current processing is log-only and has no state-changing side effects, so duplicate delivery is safe; add idempotency storage before introducing side effects.
+Task-created SQS messages contain `eventType`, `eventId`, `userId`, `taskId`, `occurredAt` (UTC ISO-8601), and `version` (`1`). The worker validates these fields and conditionally claims each `eventId` in the `TaskEventIdempotencyTable` DynamoDB table before processing. A duplicate claim is acknowledged and skipped. Processing failures remove the claim and return a partial batch failure so SQS can retry. DynamoDB TTL removes claims after 30 days.
 
 The producer writes the task to DynamoDB before publishing. If SQS publishing fails, it returns `503` with the saved task ID and tells the caller not to repeat task creation. The task remains persisted and its event is not automatically republished; operational recovery must publish the event using that task ID. A durable outbox/retry mechanism is future work.
 

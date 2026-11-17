@@ -3,6 +3,7 @@
 import importlib.util
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -22,6 +23,24 @@ def record(message_id, body):
     return {"messageId": message_id, "body": body}
 
 
+class InMemoryIdempotencyTable:
+    def __init__(self):
+        self.items = {}
+
+    def put_item(self, Item, ConditionExpression):
+        if Item["eventId"] in self.items:
+            error = RuntimeError("Duplicate event")
+            error.response = {"Error": {"Code": "ConditionalCheckFailedException"}}
+            raise error
+        self.items[Item["eventId"]] = Item.copy()
+
+    def update_item(self, Key, **kwargs):
+        self.items[Key["eventId"]]["status"] = "COMPLETED"
+
+    def delete_item(self, Key):
+        self.items.pop(Key["eventId"], None)
+
+
 def task_created_event(**overrides):
     payload = {
         "eventType": "TASK_CREATED",
@@ -36,6 +55,7 @@ def task_created_event(**overrides):
 
 
 def test_successful_task_created_event_is_acknowledged(worker, caplog):
+    worker._idempotency_table = InMemoryIdempotencyTable()
     event = {"Records": [record("message-1", task_created_event())]}
 
     result = worker.handler(event, None)
@@ -61,6 +81,7 @@ def test_unsupported_event_type_is_reported_as_batch_failure(worker):
 
 
 def test_mixed_batch_reports_only_the_failed_message(worker):
+    worker._idempotency_table = InMemoryIdempotencyTable()
     good = task_created_event()
     bad = json.dumps({"eventType": "TASK_UPDATED", "userId": "user-1", "taskId": "task-2"})
 
@@ -91,20 +112,29 @@ def test_missing_required_event_field_is_rejected(worker, overrides):
 
 def test_duplicate_delivery_is_safe_and_acknowledged(worker, caplog):
     body = task_created_event()
+    worker._idempotency_table = InMemoryIdempotencyTable()
 
     result = worker.handler(
         {"Records": [record("delivery-1", body), record("delivery-2", body)]}, None
     )
 
     assert result == {"batchItemFailures": []}
-    assert caplog.text.count("Processed task event event_id=event-1") == 2
+    assert caplog.text.count("Processed task event event_id=event-1") == 1
+    assert "Skipping duplicate task event event_id=event-1" in caplog.text
 
 
 def test_retryable_processing_failure_returns_partial_batch_failure(worker, monkeypatch):
-    def fail_processing(payload):
-        raise RuntimeError("temporary downstream failure")
+    class Table:
+        def put_item(self, **kwargs):
+            pass
 
-    monkeypatch.setattr(worker, "process_event", fail_processing)
+        def update_item(self, **kwargs):
+            raise RuntimeError("temporary downstream failure")
+
+        def delete_item(self, **kwargs):
+            pass
+
+    worker._idempotency_table = Table()
 
     result = worker.handler(
         {"Records": [record("retry-message", task_created_event())]}, None
