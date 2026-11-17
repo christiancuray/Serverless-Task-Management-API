@@ -4,7 +4,9 @@ A serverless REST API built with **Python and AWS CDK** for creating and managin
 
 This project is designed to strengthen my backend development and cloud computing skills while preparing for the **AWS Certified Developer – Associate** certification.
 
-The API is developed locally using **Floci**, an AWS cloud emulator, and has been deployed to AWS. The implementation includes authenticated task CRUD using Cognito, API Gateway, Lambda, DynamoDB, and SQS-based background processing.
+The API is developed locally using **Floci**, an AWS cloud emulator, and has been deployed to AWS. The completed backend includes authenticated task CRUD using Cognito, API Gateway, Lambda, DynamoDB, and SQS-based background processing.
+
+The separate frontend application is documented in the [frontend project](https://github.com/christiancuray/Serverless-Task-Management-API/tree/main/task-frontend/frontend).
 
 ## Project Goals
 
@@ -20,7 +22,7 @@ The API is developed locally using **Floci**, an AWS cloud emulator, and has bee
 The application follows a serverless architecture:
 
 ```text
-Client (Postman / Frontend)
+API Client
             |
             v
        API Gateway
@@ -60,8 +62,6 @@ Amazon Cognito
 4. DynamoDB stores or retrieves task information.
 5. Lambda returns an HTTP response through API Gateway.
 
-The Lambda handler scopes tasks to the authenticated user's Cognito `sub` claim and publishes task-created events to SQS for worker processing.
-
 ## Tech Stack
 
 | Technology         | Purpose                          |
@@ -73,7 +73,7 @@ The Lambda handler scopes tasks to the authenticated user's Cognito `sub` claim 
 | Amazon DynamoDB    | NoSQL task storage               |
 | Amazon Cognito     | User authentication              |
 | Amazon SQS         | Background task event processing |
-| Amazon CloudWatch  | Logging and monitoring (planned) |
+| Amazon CloudWatch  | AWS logging and monitoring       |
 | Floci              | Local AWS service emulation      |
 | Docker             | Local container environment      |
 | boto3              | AWS SDK for Python               |
@@ -103,18 +103,6 @@ serverless-task-api/
 └── README.md
 ```
 
-The `serverless_task_api` directory contains the infrastructure code, while `src` contains the application's backend logic.
-
-## API Endpoints
-
-| Method | Endpoint          | Description               | Status      |
-| ------ | ----------------- | ------------------------- | ----------- |
-| POST   | `/tasks`          | Create a task             | Implemented |
-| GET    | `/tasks`          | Retrieve the user's tasks | Implemented |
-| GET    | `/tasks/{taskId}` | Retrieve a specific task  | Implemented |
-| PUT    | `/tasks/{taskId}` | Update a task             | Implemented |
-| DELETE | `/tasks/{taskId}` | Delete a task             | Implemented |
-
 ## Local Development Setup
 
 ### Prerequisites
@@ -126,7 +114,7 @@ The `serverless_task_api` directory contains the infrastructure code, while `src
 - Docker
 - Floci
 
-An AWS account is not required for the current local development phase.
+An AWS account is not required to run the automated unit tests. A deployed backend is required for AWS-based API validation.
 
 ### 1. Clone the repository
 
@@ -261,35 +249,11 @@ The project will be designed to minimize environment-specific code so that migra
 
 ## AWS Deployment
 
-Real AWS deployment is complete. The CDK infrastructure has been deployed and the API, authentication, and AWS service integrations have been validated in the target environment.
-
-Deployment and operations include:
-
-1. Configure an AWS account and CLI credentials securely.
-2. Bootstrap the AWS CDK environment.
-3. Deploy the infrastructure using `cdk deploy`.
-4. Configure Cognito authentication and least-privilege IAM policies.
-5. Test API Gateway, Lambda, DynamoDB, and SQS in AWS.
-6. Configure CloudWatch logging and monitoring.
-7. Implement CI/CD using GitHub Actions.
-8. Set up AWS Budgets and monitor resource usage.
-
-The AWS CDK definitions are used for both local development and the deployed AWS environment, with environment-specific configuration as needed.
-
-## Development Roadmap
-
-| Week   | Focus                                       | Status                                                               |
-| ------ | ------------------------------------------- | -------------------------------------------------------------------- |
-| Week 1 | AWS CDK, Lambda, API Gateway, DynamoDB      | Implemented                                                          |
-| Week 2 | Complete CRUD, Cognito, IAM security        | CRUD and Cognito implemented; end-to-end security validation remains |
-| Week 3 | SQS, asynchronous processing, monitoring    | Complete: SQS queue, DLQ, publisher, worker, and duplicate-event idempotency |
-| Week 4 | Automated testing, CI/CD, documentation     | Complete: unit and opt-in Floci integration coverage and project documentation |
-| Week 5 | Real AWS deployment and security validation | Complete                                                             |
-| Week 6 | Frontend development and user experience    | Proposed extension; planned                                          |
+The backend has been deployed to AWS. The CDK stack defines the API, authentication, data storage, queue, worker, and event idempotency resources. Local development and automated tests can also use Floci without changing application logic.
 
 ## Project Status
 
-Weeks 3–5 are complete. Task creation publishes SQS events, a worker processes task-created events, the queue is configured with a dead-letter queue, and the worker uses DynamoDB idempotency records so an event ID is processed once. Unit and opt-in Floci integration tests cover event publishing, worker behavior, and queue redrive. The application has also been deployed to AWS and its API, authentication, and service integrations have been validated. Documentation describes test scope and failure behavior. GitHub Actions CI and frontend development remain future work.
+The backend is complete for its current scope and has been deployed to AWS. It provides authenticated task CRUD, publishes task-created events to SQS, and processes events with a worker and dead-letter queue. The worker uses DynamoDB idempotency records to prevent processing the same event ID more than once. Unit and opt-in Floci integration tests cover handler, publisher, worker, and queue behavior. Automated CI remains a possible future improvement.
 
 ## Learning Outcomes
 
