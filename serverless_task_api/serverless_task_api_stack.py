@@ -23,6 +23,7 @@ class ServerlessTaskApiStack(Stack):
         #     self, "ServerlessTaskApiQueue",
         #     visibility_timeout=Duration.seconds(300),
         # )
+        frontend_origin = "http://localhost:5173"
 
         # Cognito User Pool
         pool = cognito.UserPool(
@@ -34,7 +35,7 @@ class ServerlessTaskApiStack(Stack):
 
         client = pool.add_client(
             "TaskAppClient",
-            auth_flows=cognito.AuthFlow(user_password=True),
+            auth_flows=cognito.AuthFlow(user_password=True, user_srp=True,),
             generate_secret=False,
         )
         # Export identifiers needed by the opt-in deployed API test. These are
@@ -93,7 +94,8 @@ class ServerlessTaskApiStack(Stack):
             code=_lambda.Code.from_asset("src"),
             timeout=Duration.seconds(15),
             environment={
-                "TASKS_TABLE_NAME": tasks_table.table_name
+                "TASKS_TABLE_NAME": tasks_table.table_name,
+                "FRONTEND_ORIGIN": frontend_origin,
             },
         )
         tasks_table.grant_read_write_data(fn)
@@ -117,7 +119,32 @@ class ServerlessTaskApiStack(Stack):
 
 
         # API Gateway
-        api = apigateway.RestApi(self, "TasksApi")
+        api = apigateway.RestApi(self, "TasksApi",
+                                 rest_api_name="TasksServiceApi",
+                                 default_cors_preflight_options=apigateway.CorsOptions(
+                                     allow_origins=[frontend_origin],
+                                     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                                     allow_headers=["Authorization", "Content-Type"]
+                                 ))
+
+        cors_gateway_headers = {
+            "Access-Control-Allow-Origin": f"'{frontend_origin}'",
+            "Access-Control-Allow-Headers": "'Authorization,Content-Type'",
+            "Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+        }
+
+        api.add_gateway_response(
+            "Default4xx",
+            type=apigateway.ResponseType.DEFAULT_4_XX,
+            response_headers=cors_gateway_headers,
+        )
+
+        api.add_gateway_response(
+            "Default5xx",
+            type=apigateway.ResponseType.DEFAULT_5_XX,
+            response_headers=cors_gateway_headers,
+        )
+        
         CfnOutput(self, "TasksApiUrl", value=api.url)
         CfnOutput(self, "TasksApiId", value=api.rest_api_id)
         CfnOutput(self, "TasksApiStage", value=api.deployment_stage.stage_name)

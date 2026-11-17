@@ -132,6 +132,11 @@ def publish_task_created(item):
 def response(status, body):
     return {
         "statusCode": status,
-        "headers": {"Content-Type": "application/json"},
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": os.getenv(
+                "FRONTEND_ORIGIN", "http://localhost:5173"
+            ),
+        },
         "body": json.dumps(body),
     }

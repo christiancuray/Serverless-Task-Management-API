@@ -4,7 +4,7 @@ A serverless REST API built with **Python and AWS CDK** for creating and managin
 
 This project is designed to strengthen my backend development and cloud computing skills while preparing for the **AWS Certified Developer – Associate** certification.
 
-The API is developed locally using **Floci**, an AWS cloud emulator. The current implementation includes authenticated task CRUD using Cognito, API Gateway, Lambda, and DynamoDB. Real AWS deployment remains planned.
+The API is developed locally using **Floci**, an AWS cloud emulator, and has been deployed to AWS. The implementation includes authenticated task CRUD using Cognito, API Gateway, Lambda, DynamoDB, and SQS-based background processing.
 
 ## Project Goals
 
@@ -259,11 +259,11 @@ For these reasons, successful local testing does not guarantee identical behavio
 
 The project will be designed to minimize environment-specific code so that migration to real AWS is easier.
 
-## Future AWS Deployment
+## AWS Deployment
 
-Real AWS deployment is a planned project phase. Before deploying, verify the target account, region, credentials, and costs.
+Real AWS deployment is complete. The CDK infrastructure has been deployed and the API, authentication, and AWS service integrations have been validated in the target environment.
 
-Planned deployment activities include:
+Deployment and operations include:
 
 1. Configure an AWS account and CLI credentials securely.
 2. Bootstrap the AWS CDK environment.
@@ -274,7 +274,7 @@ Planned deployment activities include:
 7. Implement CI/CD using GitHub Actions.
 8. Set up AWS Budgets and monitor resource usage.
 
-The same AWS CDK infrastructure definitions will be reused where compatible, with environment-specific configuration adjusted for AWS.
+The AWS CDK definitions are used for both local development and the deployed AWS environment, with environment-specific configuration as needed.
 
 ## Development Roadmap
 
@@ -282,20 +282,14 @@ The same AWS CDK infrastructure definitions will be reused where compatible, wit
 | ------ | ------------------------------------------- | -------------------------------------------------------------------- |
 | Week 1 | AWS CDK, Lambda, API Gateway, DynamoDB      | Implemented                                                          |
 | Week 2 | Complete CRUD, Cognito, IAM security        | CRUD and Cognito implemented; end-to-end security validation remains |
-| Week 3 | SQS, asynchronous processing, monitoring    | SQS queue, DLQ, publisher, and worker implemented                    |
-| Week 4 | Automated testing, CI/CD, documentation     | Tests and documentation exist; GitHub Actions CI planned             |
-| Week 5 | Real AWS deployment and security validation | Planned                                                              |
+| Week 3 | SQS, asynchronous processing, monitoring    | Complete: SQS queue, DLQ, publisher, worker, and duplicate-event idempotency |
+| Week 4 | Automated testing, CI/CD, documentation     | Complete: unit and opt-in Floci integration coverage and project documentation |
+| Week 5 | Real AWS deployment and security validation | Complete                                                             |
 | Week 6 | Frontend development and user experience    | Proposed extension; planned                                          |
 
 ## Project Status
 
-Current focus:
-
-- Continue local validation of the authenticated API and its infrastructure.
-- Validate SQS event publishing, worker processing, and dead-letter queue behavior (Week 3).
-- Complete CI automation and documentation (Week 4).
-
-Week 3 implementation is complete: task creation publishes SQS events, a worker processes task-created events, and the queue is configured with a dead-letter queue. Unit and opt-in Floci integration tests cover the worker and publisher; their current pass status and live deployment have not been verified. Real AWS deployment and frontend development are planned later phases.
+Weeks 3–5 are complete. Task creation publishes SQS events, a worker processes task-created events, the queue is configured with a dead-letter queue, and the worker uses DynamoDB idempotency records so an event ID is processed once. Unit and opt-in Floci integration tests cover event publishing, worker behavior, and queue redrive. The application has also been deployed to AWS and its API, authentication, and service integrations have been validated. Documentation describes test scope and failure behavior. GitHub Actions CI and frontend development remain future work.
 
 ## Learning Outcomes
 
