@@ -6,7 +6,7 @@ This project is designed to strengthen my backend development and cloud computin
 
 The API is developed locally using **Floci**, an AWS cloud emulator, and has been deployed to AWS. The completed backend includes authenticated task CRUD using Cognito, API Gateway, Lambda, DynamoDB, and SQS-based background processing.
 
-The separate frontend application is documented in the [frontend project](https://github.com/christiancuray/Serverless-Task-Management-API/tree/main/task-frontend/frontend).
+The separate frontend application is documented in the [Tasky-UI repository](https://github.com/christiancuray/Tasky-UI).
 
 ## Project Goals
 
