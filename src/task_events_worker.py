@@ -2,10 +2,27 @@
 
 import json
 import logging
+import os
+import time
 from datetime import datetime, timezone
+
+import boto3
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+_idempotency_table = None
+
+
+def _table():
+    """Create the DynamoDB table client lazily so local imports stay lightweight."""
+    global _idempotency_table
+    if _idempotency_table is None:
+        table_name = os.environ.get("TASK_EVENT_IDEMPOTENCY_TABLE_NAME")
+        if not table_name:
+            raise RuntimeError("TASK_EVENT_IDEMPOTENCY_TABLE_NAME is not configured")
+        _idempotency_table = boto3.resource("dynamodb").Table(table_name)
+    return _idempotency_table
 
 def handler(event, context):
     failures= []
@@ -49,9 +66,36 @@ def handler(event, context):
 
 
 def process_event(payload):
-    # This worker currently has no state-changing side effects, so duplicate delivery is safe.
-    logger.info(
-        "Processed task event event_id=%s user_id=%s task_id=%s",
-        payload["eventId"], payload["userId"], payload["taskId"],
-    )
+    table = _table()
+    event_id = payload["eventId"]
+    try:
+        table.put_item(
+            Item={"eventId": event_id, "status": "PROCESSING", "expiresAt": int(time.time()) + 30 * 24 * 60 * 60},
+            ConditionExpression="attribute_not_exists(eventId)",
+        )
+    except Exception as error:
+        # ConditionalCheckFailedException indicates another delivery already claimed or
+        # completed this event. It is acknowledged so SQS will not redeliver it.
+        if error.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            logger.info("Skipping duplicate task event event_id=%s", event_id)
+            return
+        raise
+
+    try:
+        # Place state-changing event work here. The eventId claim prevents a second
+        # delivery from running the same work concurrently.
+        logger.info(
+            "Processed task event event_id=%s user_id=%s task_id=%s",
+            event_id, payload["userId"], payload["taskId"],
+        )
+        table.update_item(
+            Key={"eventId": event_id},
+            UpdateExpression="SET #status = :completed",
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={":completed": "COMPLETED"},
+        )
+    except Exception:
+        # Permit a later SQS retry after a failed processing attempt.
+        table.delete_item(Key={"eventId": event_id})
+        raise
 

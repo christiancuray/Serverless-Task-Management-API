@@ -18,3 +18,5 @@ node_modules/
 wiki/
 .agents
 AGENTS.md
+persistent-event.json
+test-*.json

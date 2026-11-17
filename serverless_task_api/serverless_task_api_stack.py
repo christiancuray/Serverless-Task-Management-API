@@ -74,6 +74,17 @@ class ServerlessTaskApiStack(Stack):
             removal_policy=RemovalPolicy.DESTROY
         )
 
+        task_event_idempotency_table = dynamodb.Table(
+            self, "TaskEventIdempotencyTable",
+            partition_key=dynamodb.Attribute(
+                name="eventId",
+                type=dynamodb.AttributeType.STRING,
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            time_to_live_attribute="expiresAt",
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+
         # lambda function
         fn =_lambda.Function(
             self, "TasksHandler",
@@ -94,7 +105,11 @@ class ServerlessTaskApiStack(Stack):
                                  runtime=_lambda.Runtime.PYTHON_3_13,
                                  handler="task_events_worker.handler",
                                  code=_lambda.Code.from_asset("src"),
-                                 timeout=Duration.seconds(20))
+                                 timeout=Duration.seconds(20),
+                                 environment={
+                                     "TASK_EVENT_IDEMPOTENCY_TABLE_NAME": task_event_idempotency_table.table_name,
+                                 })
+        task_event_idempotency_table.grant_read_write_data(worker)
         worker.add_event_source(event_sources.SqsEventSource(
             queue, batch_size=5, report_batch_item_failures=True))
         queue.grant_consume_messages(worker)
